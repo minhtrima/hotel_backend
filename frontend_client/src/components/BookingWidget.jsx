@@ -53,7 +53,7 @@ export default function BookingWidget() {
       const data = await response.json();
       if (!data.success) throw new Error(data.message || "Booking failed");
 
-      navigate(`/booking-room/${data.booking._id}`);
+      navigate(`/booking-room/${data.booking.bookingCode}`);
     } catch (error) {
       console.error("Error booking room:", error);
       alert("Đặt phòng thất bại. Vui lòng thử lại.");
@@ -70,29 +70,6 @@ export default function BookingWidget() {
       0
     );
     return { adults: totalAdults, children: totalChildren };
-  };
-
-  const updateRoom = (index, field, value) => {
-    setRooms((prev) =>
-      prev.map((room, i) =>
-        i === index
-          ? {
-              ...room,
-              [field]: Math.max(field === "numberOfAdults" ? 1 : 0, value),
-            }
-          : room
-      )
-    );
-  };
-
-  const addRoom = () => {
-    setRooms((prev) => [...prev, { numberOfAdults: 2, numberOfChildren: 0 }]);
-  };
-
-  const removeRoom = (index) => {
-    if (rooms.length > 1) {
-      setRooms((prev) => prev.filter((_, i) => i !== index));
-    }
   };
 
   return (

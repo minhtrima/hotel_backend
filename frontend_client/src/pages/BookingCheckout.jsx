@@ -212,7 +212,8 @@ export default function BookingCheckout() {
             manualData.message || "Failed to create manual payment record"
           );
         }
-        navigate(`/booking/complete/${bookingId}`);
+        const updatedBooking = await fetchBookingData(bookingId);
+        navigate(`/booking/complete/${updatedBooking.bookingCode}`);
         return;
       } else if (paymentMethod === "vnpay") {
         // Redirect to VNPAY payment using payment controller

@@ -64,11 +64,13 @@ export default function BookingLookup() {
           paymentInfo: paymentData,
         }));
       }
-      
+
       // Check if review exists
       if (data.status === "completed") {
         try {
-          const reviewResponse = await fetch(`/api/reviews/booking/${data._id}`);
+          const reviewResponse = await fetch(
+            `/api/reviews/booking/${data._id}`
+          );
           if (reviewResponse.ok) {
             const reviewData = await reviewResponse.json();
             if (reviewData.success && reviewData.review) {
@@ -79,7 +81,7 @@ export default function BookingLookup() {
           console.error("Error checking review:", err);
         }
       }
-      
+
       console.log(booking);
     } catch (err) {
       console.error("Error looking up booking:", err);
@@ -727,37 +729,9 @@ export default function BookingLookup() {
                           </div>
                           <div className="text-xl font-bold text-yellow-700">
                             {formatCurrency(
-                              booking.totalPrice +
-                                (getMergedServices(!existingReview && (
-                  <button
-                    onClick={() => navigate(`/review/${booking._id}`)}
-                    className="w-full bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white py-4 px-6 rounded-xl font-bold text-lg transition-all duration-200 transform hover:-translate-y-1 hover:shadow-lg"
-                  >
-                    ⭐ Đánh giá trải nghiệm
-                  </button>
-                )}
-                
-                {booking.status === "completed" && existingReview && (
-                  <div className="bg-gradient-to-r from-green-50 to-green-100 p-4 rounded-xl border border-green-200">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <div className="text-green-800 font-semibold">✓ Đã đánh giá</div>
-                        <div className="text-sm text-green-600 mt-1">
-                          Cảm ơn bạn đã chia sẻ trải nghiệm!
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        {[1, 2, 3, 4, 5].map((star) => (
-                          <span
-                            key={star}
-                            className={`text-xl ${star <= existingReview.rating ? "text-yellow-400" : "text-gray-300"}`}
-                          >
-                            ★
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  </div</div>
+                              booking.totalPrice - calculateTotalPaid()
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -767,13 +741,42 @@ export default function BookingLookup() {
 
               {/* Action Buttons với design mới */}
               <div className="space-y-3">
-                {booking.status === "completed" && (
+                {booking.status === "completed" && !existingReview && (
                   <button
                     onClick={() => navigate(`/review/${booking._id}`)}
                     className="w-full bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white py-4 px-6 rounded-xl font-bold text-lg transition-all duration-200 transform hover:-translate-y-1 hover:shadow-lg"
                   >
                     ⭐ Đánh giá trải nghiệm
                   </button>
+                )}
+
+                {booking.status === "completed" && existingReview && (
+                  <div className="bg-gradient-to-r from-green-50 to-green-100 p-4 rounded-xl border border-green-200">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="text-green-800 font-semibold">
+                          ✓ Đã đánh giá
+                        </div>
+                        <div className="text-sm text-green-600 mt-1">
+                          Cảm ơn bạn đã chia sẻ trải nghiệm!
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <span
+                            key={star}
+                            className={`text-xl ${
+                              star <= existingReview.rating
+                                ? "text-yellow-400"
+                                : "text-gray-300"
+                            }`}
+                          >
+                            ★
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
                 )}
 
                 {booking.status === "booked" && (

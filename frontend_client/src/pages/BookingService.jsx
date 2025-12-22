@@ -206,7 +206,8 @@ export default function BookingService() {
       const data = await response.json();
       console.log("Transportation services saved successfully:", data);
       alert("Dịch vụ vận chuyển đã được cập nhật thành công!");
-      navigate(`/booking-checkout/${bookingId}`);
+      const updatedBooking = await fetchBookingData(bookingId);
+      navigate(`/booking-checkout/${updatedBooking.bookingCode}`);
     } catch (error) {
       alert("Lỗi khi cập nhật dịch vụ: " + error.message);
       console.error("Error submitting services:", error);

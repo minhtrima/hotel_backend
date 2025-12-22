@@ -266,7 +266,8 @@ export default function BookingRoom() {
         alert("Phòng đã được chọn thành công!");
         // Check if all rooms now have desiredRoomTypeId using the updated booking data
         if (bookingData.rooms.every((room) => room.desiredRoomTypeId)) {
-          navigate(`/booking-service/${bookingId}`);
+          const updatedBooking = await fetchBookingData(bookingId);
+          navigate(`/booking-service/${updatedBooking.bookingCode}`);
           return;
         }
       }

@@ -112,7 +112,8 @@ export default function Booking() {
     const data = await response.json();
     if (data.success) {
       alert("Booking updated successfully!");
-      navigate("/booking-room/" + bookingId);
+      const updatedBooking = await fetchBookingData(bookingId);
+      navigate("/booking-room/" + updatedBooking.bookingCode);
     } else {
       alert("Failed to update booking: " + data.message);
     }

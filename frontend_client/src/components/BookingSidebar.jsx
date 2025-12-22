@@ -51,7 +51,7 @@ export default function BookingSidebar({ booking, onDeleteRoom }) {
       const data = await response.json();
       if (data.success) {
         // Navigate to booking-room page after successful reset
-        navigate(`/booking-room/${booking._id}`);
+        navigate(`/booking-room/${data.booking.bookingCode}`);
       }
     } catch (error) {
       console.error("Error resetting room:", error);
@@ -75,7 +75,7 @@ export default function BookingSidebar({ booking, onDeleteRoom }) {
       const data = await response.json();
       if (data.success) {
         // Force page refresh to ensure all data is updated
-        window.location.href = `/booking/${booking._id}`;
+        window.location.href = `/booking/${data.booking.bookingCode}`;
       }
     } catch (error) {
       console.error("Error resetting dates:", error);

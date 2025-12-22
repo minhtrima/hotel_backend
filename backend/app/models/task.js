@@ -32,7 +32,7 @@ const TaskSchema = new mongoose.Schema({
       "refill",
       "inspection",
       "other",
-      "issue-report ",
+      "issue-report",
     ],
     default: "cleaning",
   },

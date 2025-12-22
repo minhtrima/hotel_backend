@@ -745,24 +745,7 @@ exports.checkOut = async (req, res, next) => {
       checkedOutRoomIds
     );
 
-    // Send receipt email if customer has email
-    if (populatedBooking.customerid?.email) {
-      try {
-        const { sendReceiptEmail } = require("../utils/emailService");
-        await sendReceiptEmail(
-          populatedBooking,
-          populatedBooking.customerid,
-          receiptData
-        );
-        console.log(
-          "Receipt email sent to:",
-          populatedBooking.customerid.email
-        );
-      } catch (emailError) {
-        console.error("Error sending receipt email:", emailError);
-        // Don't fail checkout if email fails
-      }
-    }
+    // Note: Email sending moved to manual action from Payment page
 
     res.status(200).json({
       success: true,
@@ -801,18 +784,35 @@ exports.getBookingById = async (req, res, next) => {
   try {
     const { bookingId } = req.params;
 
-    const bookingData = await Booking.findById(bookingId)
-      .populate("customerid")
-      .populate("rooms.roomid")
-      .populate("rooms.desiredRoomTypeId")
-      .populate({
-        path: "rooms.additionalServices.serviceId",
-        model: "Service",
-      })
-      .populate({
-        path: "services.serviceId",
-        model: "Service",
-      });
+    // Check if bookingId is actually a booking code (starts with BK-)
+    let bookingData;
+    if (bookingId.startsWith("BK-")) {
+      bookingData = await Booking.findOne({ bookingCode: bookingId })
+        .populate("customerid")
+        .populate("rooms.roomid")
+        .populate("rooms.desiredRoomTypeId")
+        .populate({
+          path: "rooms.additionalServices.serviceId",
+          model: "Service",
+        })
+        .populate({
+          path: "services.serviceId",
+          model: "Service",
+        });
+    } else {
+      bookingData = await Booking.findById(bookingId)
+        .populate("customerid")
+        .populate("rooms.roomid")
+        .populate("rooms.desiredRoomTypeId")
+        .populate({
+          path: "rooms.additionalServices.serviceId",
+          model: "Service",
+        })
+        .populate({
+          path: "services.serviceId",
+          model: "Service",
+        });
+    }
 
     if (!bookingData) {
       return next(new ApiError(404, "Không tìm thấy đặt phòng"));
@@ -2129,5 +2129,268 @@ exports.cleanupExpiredPendingBookings = async () => {
   } catch (error) {
     console.error("[Cleanup] Error cleaning up expired bookings:", error);
     return 0;
+  }
+};
+
+// Generate and send receipt email
+exports.sendReceiptEmail = async (req, res, next) => {
+  try {
+    const { bookingId } = req.params;
+
+    const booking = await Booking.findById(bookingId)
+      .populate("customerid")
+      .populate("rooms.roomid")
+      .populate("rooms.desiredRoomTypeId")
+      .populate("rooms.additionalServices.serviceId")
+      .populate("services.serviceId");
+
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy booking",
+      });
+    }
+
+    if (!booking.customerid?.email) {
+      return res.status(400).json({
+        success: false,
+        message: "Booking không có email khách hàng",
+      });
+    }
+
+    // Get all completed rooms for receipt
+    const completedRoomIds = booking.rooms
+      .filter((room) => room.status === "completed")
+      .map((room) => {
+        const roomId =
+          typeof room.roomid === "object" && room.roomid !== null
+            ? room.roomid._id?.toString() || room.roomid.toString()
+            : room.roomid?.toString();
+        return roomId;
+      });
+
+    if (completedRoomIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Không có phòng nào đã hoàn thành để xuất hóa đơn",
+      });
+    }
+
+    const receiptData = generateReceiptData(booking, completedRoomIds);
+
+    try {
+      const { sendReceiptEmail } = require("../utils/emailService");
+      await sendReceiptEmail(booking, booking.customerid, receiptData);
+
+      res.status(200).json({
+        success: true,
+        message: `Đã gửi hóa đơn đến ${booking.customerid.email}`,
+        receiptData: receiptData,
+      });
+    } catch (emailError) {
+      console.error("Error sending receipt email:", emailError);
+      return res.status(500).json({
+        success: false,
+        message: "Lỗi khi gửi email hóa đơn",
+        error: emailError.message,
+      });
+    }
+  } catch (error) {
+    console.error("Error in sendReceiptEmail:", error);
+    next(new ApiError(500, "Lỗi khi gửi hóa đơn"));
+  }
+};
+
+// Generate receipt data for download
+exports.getReceiptData = async (req, res, next) => {
+  try {
+    const { bookingId } = req.params;
+
+    const booking = await Booking.findById(bookingId)
+      .populate("customerid")
+      .populate("rooms.roomid")
+      .populate("rooms.desiredRoomTypeId")
+      .populate("rooms.additionalServices.serviceId")
+      .populate("services.serviceId");
+
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy booking",
+      });
+    }
+
+    // Get all completed rooms for receipt
+    const completedRoomIds = booking.rooms
+      .filter((room) => room.status === "completed")
+      .map((room) => {
+        const roomId =
+          typeof room.roomid === "object" && room.roomid !== null
+            ? room.roomid._id?.toString() || room.roomid.toString()
+            : room.roomid?.toString();
+        return roomId;
+      });
+
+    if (completedRoomIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Không có phòng nào đã hoàn thành để xuất hóa đơn",
+      });
+    }
+
+    const receiptData = generateReceiptData(booking, completedRoomIds);
+
+    res.status(200).json({
+      success: true,
+      receiptData: receiptData,
+    });
+  } catch (error) {
+    console.error("Error getting receipt data:", error);
+    next(new ApiError(500, "Lỗi khi lấy dữ liệu hóa đơn"));
+  }
+};
+
+// Change room in booking
+exports.changeRoom = async (req, res, next) => {
+  try {
+    const { bookingId } = req.params;
+    const { oldRoomId, newRoomId } = req.body;
+
+    if (!oldRoomId || !newRoomId) {
+      return res.status(400).json({
+        success: false,
+        message: "Thiếu thông tin phòng cũ hoặc phòng mới",
+      });
+    }
+
+    // Tìm booking
+    const booking = await Booking.findById(bookingId)
+      .populate("rooms.roomid")
+      .populate("rooms.desiredRoomTypeId");
+
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy booking",
+      });
+    }
+
+    // Tìm phòng cũ trong booking
+    const oldRoomIndex = booking.rooms.findIndex((room) => {
+      const roomId =
+        typeof room.roomid === "object" && room.roomid !== null
+          ? room.roomid._id?.toString() || room.roomid.toString()
+          : room.roomid?.toString();
+      return roomId === oldRoomId;
+    });
+
+    if (oldRoomIndex === -1) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy phòng cũ trong booking",
+      });
+    }
+
+    const oldRoomData = booking.rooms[oldRoomIndex];
+
+    // Kiểm tra phòng cũ phải đang checked_in
+    if (oldRoomData.status !== "checked_in") {
+      return res.status(400).json({
+        success: false,
+        message: "Chỉ có thể đổi phòng đang ở (checked_in)",
+      });
+    }
+
+    // Lấy thông tin phòng mới
+    const newRoom = await Room.findById(newRoomId).populate("typeid");
+    if (!newRoom) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy phòng mới",
+      });
+    }
+
+    // Kiểm tra phòng mới có sẵn không
+    if (newRoom.status !== "available") {
+      return res.status(400).json({
+        success: false,
+        message: "Phòng mới không khả dụng",
+      });
+    }
+
+    // Check out phòng cũ
+    oldRoomData.actualCheckOutDate = new Date();
+    oldRoomData.status = "completed";
+
+    // Tạo phòng mới trong booking với thông tin từ phòng cũ
+    const newRoomData = {
+      roomid: newRoom._id,
+      roomSnapshot: {
+        roomNumber: newRoom.roomNumber,
+        typeName: newRoom.typeid?.name || "",
+      },
+      desiredRoomTypeId: newRoom.typeid._id,
+      status: "checked_in",
+      numberOfAdults: oldRoomData.numberOfAdults,
+      numberOfChildren: oldRoomData.numberOfChildren,
+      pricePerNight: newRoom.typeid?.pricePerNight || 0,
+      extraBedAdded: oldRoomData.extraBedAdded,
+      expectedCheckInDate: new Date(), // Check in ngay
+      expectedCheckOutDate: oldRoomData.expectedCheckOutDate, // Giữ nguyên ngày check out dự kiến
+      actualCheckInDate: new Date(),
+      actualCheckOutDate: null,
+      bookingPrice: newRoom.typeid?.pricePerNight || 0,
+      mainGuest: oldRoomData.mainGuest, // Giữ nguyên thông tin khách chính
+      additionalGuests: oldRoomData.additionalGuests || [], // Giữ nguyên khách bổ sung
+      additionalServices: [], // Bắt đầu mới cho dịch vụ
+    };
+
+    // Thêm phòng mới vào booking
+    booking.rooms.push(newRoomData);
+
+    // Update trạng thái phòng cũ
+    await Room.findByIdAndUpdate(oldRoomId, {
+      status: "available",
+      housekeepingStatus: "dirty",
+    });
+
+    // Update trạng thái phòng mới
+    await Room.findByIdAndUpdate(newRoomId, {
+      status: "occupied",
+    });
+
+    // Tính lại tổng giá
+    const totalPrice = calculateBookingTotalPrice(booking);
+    booking.totalPrice = totalPrice;
+
+    await booking.save();
+
+    // Update payment status
+    await updateBookingPaymentStatus(booking._id);
+
+    // Populate lại để trả về đầy đủ thông tin
+    const updatedBooking = await Booking.findById(bookingId)
+      .populate("customerid")
+      .populate("rooms.roomid")
+      .populate("rooms.desiredRoomTypeId")
+      .populate({
+        path: "rooms.additionalServices.serviceId",
+        model: "Service",
+      })
+      .populate({
+        path: "services.serviceId",
+        model: "Service",
+      });
+
+    res.status(200).json({
+      success: true,
+      message: "Đổi phòng thành công",
+      booking: updatedBooking,
+      oldRoomNumber: oldRoomData.roomSnapshot?.roomNumber,
+      newRoomNumber: newRoom.roomNumber,
+    });
+  } catch (error) {
+    console.error("Error changing room:", error);
+    next(new ApiError(500, "Lỗi khi đổi phòng"));
   }
 };
