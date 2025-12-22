@@ -1,0 +1,5 @@
+Màn hình Inventory (vật tư)
+Màn hình Profile (cá nhân)
+Chức năng yêu cầu từ khách/DND
+Báo cáo tình trạng phòng chi tiết
+Yêu cầu bổ sung vật tư
